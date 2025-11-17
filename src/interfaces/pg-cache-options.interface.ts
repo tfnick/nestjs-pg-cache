@@ -1,4 +1,4 @@
-import { PostgresStore } from '@keyv/postgres';
+import type PostgresStore from '@keyv/postgres';
 
 export interface PgCacheOptions {
   /**
@@ -25,6 +25,12 @@ export interface PgCacheOptions {
    * Whether to use compression (default: false)
    */
   compression?: boolean;
+  
+  /**
+   * Whether to use unlogged table for better performance (default: false)
+   * Note: Unlogged tables are not crash-safe and are not replicated to standby servers
+   */
+  useUnloggedTable?: boolean;
   
   /**
    * Serialization function

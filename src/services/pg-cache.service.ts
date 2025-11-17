@@ -6,7 +6,7 @@ import { PgCacheOptions } from '../interfaces/pg-cache-options.interface';
 @Injectable()
 export class PgCacheService {
   private readonly logger = new Logger(PgCacheService.name);
-  private cache: Keyv;
+  private cache!: Keyv;
 
   constructor(
     @Inject(PG_CACHE_TOKEN) private readonly options: PgCacheOptions
@@ -16,18 +16,35 @@ export class PgCacheService {
 
   private initializeCache() {
     try {
-      this.cache = new Keyv({
-        store: this.options.store,
-        uri: this.options.uri,
-        table: this.options.table,
-        namespace: this.options.namespace,
+      const keyvOptions: any = {
         ttl: this.options.ttl || DEFAULT_CACHE_TTL,
         compression: this.options.compression,
         serialize: this.options.serialize,
         deserialize: this.options.deserialize
-      });
+      };
 
-      // Handle connection errors
+      // 使用存储实例或 URI
+      if (this.options.store) {
+        keyvOptions.store = this.options.store;
+      } else if (this.options.uri) {
+        // 构建 postgres 配置对象
+        const postgresConfig: any = {
+          uri: this.options.uri
+        };
+        
+        // 添加其他配置选项
+        if (this.options.table) postgresConfig.table = this.options.table;
+        if (this.options.useUnloggedTable !== undefined) postgresConfig.useUnloggedTable = this.options.useUnloggedTable;
+        
+        keyvOptions.store = postgresConfig;
+      }
+
+      // 添加其他配置
+      if (this.options.namespace) keyvOptions.namespace = this.options.namespace;
+
+      this.cache = new Keyv(keyvOptions);
+
+      // 处理连接错误
       this.cache.on('error', (error) => {
         this.logger.error('Cache connection error:', error);
       });

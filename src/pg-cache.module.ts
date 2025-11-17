@@ -2,7 +2,7 @@ import { DynamicModule, Module, Provider } from '@nestjs/common';
 import { PgCacheService } from './services/pg-cache.service';
 import { PG_CACHE_MODULE_OPTIONS, PG_CACHE_TOKEN } from './constants';
 import { PgCacheModuleOptions, PgCacheOptions } from './interfaces/pg-cache-options.interface';
-import { PostgresStore } from '@keyv/postgres';
+import type PostgresStore from '@keyv/postgres';
 
 @Module({})
 export class PgCacheModule {

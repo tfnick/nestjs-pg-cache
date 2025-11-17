@@ -7,7 +7,8 @@
 - ✅ 基于 @keyv/postgres 实现
 - ✅ 支持同步和异步配置
 - ✅ 全局缓存支持
-- ✅ 装饰器方式缓存方法结果
+- ✅ 注解式缓存方法结果（@Cacheable, @CacheEvict, @CachePut, @CacheConditional）
+- ✅ 支持动态参数占位符（如 `{{0}}`, `{{1}}`）
 - ✅ 灵活的缓存配置
 - ✅ 错误处理和日志记录
 - ✅ TypeScript 支持
@@ -96,25 +97,39 @@ import { PgCacheModule } from 'nestjs-pg-cache';
 export class AppModule {}
 ```
 
-### 使用装饰器
+### 使用注解式缓存
 
 ```typescript
-import { Injectable, UseInterceptors } from '@nestjs/common';
-import { CacheConfig, CacheInterceptor } from 'nestjs-pg-cache';
+import { Injectable } from '@nestjs/common';
+import { Cacheable, CacheEvict, CachePut, CacheConditional } from 'nestjs-pg-cache';
 
 @Injectable()
 export class ProductService {
   
-  @CacheConfig('products:all', 60000) // 缓存1分钟
-  @UseInterceptors(CacheInterceptor)
+  @Cacheable('products', 'products:all', 60000) // 缓存1分钟
   async getAllProducts() {
     return await this.productRepository.find();
   }
 
-  @CacheConfig('products:{{id}}', 300000) // 动态key，缓存5分钟
-  @UseInterceptors(CacheInterceptor)
+  @Cacheable('products', 'products:{{0}}', 300000) // 动态key，缓存5分钟
   async getProduct(id: string) {
     return await this.productRepository.findOne(id);
+  }
+
+  @CacheEvict('products', 'products:all') // 删除指定缓存
+  async createProduct(product: Product) {
+    return await this.productRepository.save(product);
+  }
+
+  @CachePut('products', 'products:{{0}}', 300000) // 更新缓存
+  async updateProduct(id: string, product: Product) {
+    return await this.productRepository.update(id, product);
+  }
+
+  @CacheConditional('products', 'products:{{0}}', (result) => result !== null, 300000)
+  async getProductIfAvailable(id: string) {
+    const product = await this.productRepository.findOne(id);
+    return product || null;
   }
 }
 ```
@@ -147,16 +162,19 @@ export class ProductService {
 #### mdelete(keys: string[]): Promise<boolean[]>
 批量删除缓存值
 
-### 装饰器
+### 注解式缓存装饰器
 
-#### @CacheKey(key: string)
-设置缓存键
+#### @Cacheable(cacheName: string, cacheKey: string, ttl?: number)
+缓存方法结果
 
-#### @CacheTTL(ttl: number)
-设置缓存过期时间（毫秒）
+#### @CacheEvict(cacheName: string, cacheKey: string)
+删除缓存
 
-#### @CacheConfig(key: string, ttl?: number)
-组合装饰器，设置缓存键和过期时间
+#### @CachePut(cacheName: string, cacheKey: string, ttl?: number)
+更新缓存
+
+#### @CacheConditional(cacheName: string, cacheKey: string, condition: (result: any) => boolean, ttl?: number)
+条件缓存
 
 ## 配置选项
 
@@ -176,6 +194,7 @@ export class ProductService {
 | namespace | string | 键名前缀 | 'keyv:' |
 | ttl | number | 默认过期时间（毫秒） | 3600000 |
 | compression | boolean | 是否压缩 | false |
+| useUnloggedTable | boolean | 是否使用无日志表（性能更好，但崩溃不安全） | false |
 | serialize | Function | 序列化函数 | JSON.stringify |
 | deserialize | Function | 反序列化函数 | JSON.parse |
 | store | PostgresStore | 自定义存储实例 | - |
