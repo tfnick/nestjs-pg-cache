@@ -30,9 +30,9 @@ export function CacheEvict(CACHE_NAME: string, CACHE_KEY: string) {
         // 暂时不支持通配符删除，需要扩展功能
         console.warn('Wildcard cache eviction is not fully supported by keyv');
       } else if (key !== null) {
-        await cacheService.delete(`${CACHE_NAME}${key}`);
+        await cacheService.del(`${CACHE_NAME}${key}`);
       } else {
-        await cacheService.delete(`${CACHE_NAME}${CACHE_KEY}`);
+        await cacheService.del(`${CACHE_NAME}${CACHE_KEY}`);
       }
 
       return result;
