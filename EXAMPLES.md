@@ -4,6 +4,7 @@
 
 ### 1. 导入模块
 
+#### 方式一：静态配置
 ```typescript
 import { Module } from '@nestjs/common';
 import { PgCacheModule } from 'nestjs-pg-cache';
@@ -16,6 +17,74 @@ import { PgCacheModule } from 'nestjs-pg-cache';
         ttl: 3600000, // 1小时
       },
       global: true,
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+#### 方式二：动态配置（推荐）
+```typescript
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { PgCacheModule } from 'nestjs-pg-cache';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot(),
+    PgCacheModule.forRootAsync({
+      global: true,
+      useFactory: (config: ConfigService) => {
+        const host = config.get<string>('db.postgres.host', 'localhost');
+        const port = config.get<number>('db.postgres.port', 5432);
+        const username = config.get<string>('db.postgres.username', 'postgres');
+        const password = config.get<string>('db.postgres.password', 'postgres');
+        const database = config.get<string>('db.postgres.database', 'nest-admin');
+
+        const uri = `postgresql://${username}:${password}@${host}:${port}/${database}`;
+
+        return {
+          cache: {
+            uri,
+            ttl: 3600000, // 1小时
+          },
+        };
+      },
+      inject: [ConfigService],
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+#### 方式三：简化配置格式
+```typescript
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { PgCacheModule } from 'nestjs-pg-cache';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot(),
+    PgCacheModule.forRootAsync({
+      global: true,
+      useFactory: (config: ConfigService) => {
+        const host = config.get<string>('db.postgres.host', 'localhost');
+        const port = config.get<number>('db.postgres.port', 5432);
+        const username = config.get<string>('db.postgres.username', 'postgres');
+        const password = config.get<string>('db.postgres.password', 'postgres');
+        const database = config.get<string>('db.postgres.database', 'nest-admin');
+
+        const uri = `postgresql://${username}:${password}@${host}:${port}/${database}`;
+
+        // 直接返回PgCacheOptions
+        return {
+          uri,
+          ttl: 3600000,
+          table: 'app_cache', // 自定义表名
+        };
+      },
+      inject: [ConfigService],
     }),
   ],
 })

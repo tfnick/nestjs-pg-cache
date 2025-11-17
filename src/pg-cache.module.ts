@@ -30,7 +30,7 @@ export class PgCacheModule {
   }
 
   static forRootAsync(options: {
-    useFactory: (...args: any[]) => Promise<PgCacheModuleOptions> | PgCacheModuleOptions;
+    useFactory: (...args: any[]) => Promise<PgCacheModuleOptions> | Promise<{ cache?: PgCacheOptions; global?: boolean }> | PgCacheModuleOptions | { cache?: PgCacheOptions; global?: boolean };
     inject?: any[];
     global?: boolean;
   }): DynamicModule {
@@ -42,19 +42,36 @@ export class PgCacheModule {
       },
       {
         provide: PG_CACHE_TOKEN,
-        useFactory: async (moduleOptions: PgCacheModuleOptions) => {
-          return this.createCacheOptions(moduleOptions.cache);
+        useFactory: async (moduleOptions: PgCacheModuleOptions | { cache?: PgCacheOptions; global?: boolean }) => {
+          // 支持多种配置格式：
+          // 1. 直接包含cache属性的PgCacheModuleOptions
+          // 2. 包含cache和global属性的对象
+          // 3. 直接传入PgCacheOptions
+          if (moduleOptions && typeof moduleOptions === 'object') {
+            if ('cache' in moduleOptions) {
+              return this.createCacheOptions(moduleOptions.cache);
+            } else if ('uri' in moduleOptions || 'store' in moduleOptions) {
+              // 直接传入的是PgCacheOptions
+              return this.createCacheOptions(moduleOptions as PgCacheOptions);
+            }
+          }
+          
+          // 默认情况
+          return this.createCacheOptions({});
         },
         inject: [PG_CACHE_MODULE_OPTIONS],
       },
       PgCacheService,
     ];
 
+    // 需要根据配置动态决定global属性
+    const global = options.global !== undefined ? options.global : false;
+
     return {
       module: PgCacheModule,
       providers: providers,
       exports: [PgCacheService],
-      global: options.global || false,
+      global: global,
     };
   }
 
