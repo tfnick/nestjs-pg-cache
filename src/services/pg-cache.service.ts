@@ -2,6 +2,7 @@ import { Injectable, Inject, Logger } from '@nestjs/common';
 import Keyv from 'keyv';
 import { PG_CACHE_TOKEN, DEFAULT_CACHE_TTL } from '../constants';
 import { PgCacheOptions } from '../interfaces/pg-cache-options.interface';
+import PostgresStore from '@keyv/postgres';
 
 @Injectable()
 export class PgCacheService {
@@ -27,16 +28,14 @@ export class PgCacheService {
       if (this.options.store) {
         keyvOptions.store = this.options.store;
       } else if (this.options.uri) {
-        // 构建 postgres 配置对象
-        const postgresConfig: any = {
-          uri: this.options.uri
-        };
+        // 创建 PostgresStore 实例，而不是直接传入配置对象
+        const postgresStore = new PostgresStore({
+          uri: this.options.uri,
+          table: this.options.table,
+          useUnloggedTable: this.options.useUnloggedTable
+        });
         
-        // 添加其他配置选项
-        if (this.options.table) postgresConfig.table = this.options.table;
-        if (this.options.useUnloggedTable !== undefined) postgresConfig.useUnloggedTable = this.options.useUnloggedTable;
-        
-        keyvOptions.store = postgresConfig;
+        keyvOptions.store = postgresStore;
       }
 
       // 添加其他配置

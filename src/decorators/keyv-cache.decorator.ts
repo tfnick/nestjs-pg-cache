@@ -1,4 +1,4 @@
-import { Inject } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PgCacheService } from './../services/pg-cache.service';
 import { paramsKeyFormat } from './../utils/params-key-format';
 
@@ -16,26 +16,39 @@ export function CacheEvict(CACHE_NAME: string, CACHE_KEY: string) {
     const originMethod = descriptor.value;
 
     descriptor.value = async function (...args: any[]) {
-      // 获取注入的缓存服务
-      const cacheService: PgCacheService = (this as any).cacheService;
-      const key = paramsKeyFormat(originMethod, CACHE_KEY, args);
+      try {
+        // 获取注入的缓存服务
+        const cacheService: PgCacheService = (this as any).cacheService;
+        
+        // 执行原始方法
+        const result = await originMethod.apply(this, args);
 
-      // 执行原始方法
-      const result = await originMethod.apply(this, args);
+        // 清除缓存
+        if (cacheService) {
+          const key = paramsKeyFormat(originMethod, CACHE_KEY, args);
 
-      // 清除缓存
-      if (key === '*') {
-        // 清除所有以 CACHE_NAME 开头的缓存
-        // 注意：keyv 不支持 pattern 删除，这里需要特殊处理
-        // 暂时不支持通配符删除，需要扩展功能
-        console.warn('Wildcard cache eviction is not fully supported by keyv');
-      } else if (key !== null) {
-        await cacheService.del(`${CACHE_NAME}${key}`);
-      } else {
-        await cacheService.del(`${CACHE_NAME}${CACHE_KEY}`);
+          if (key === '*') {
+            // 清除所有以 CACHE_NAME 开头的缓存
+            // 注意：keyv 不支持 pattern 删除，这里需要特殊处理
+            // 暂时不支持通配符删除，需要扩展功能
+            console.warn('Wildcard cache eviction is not fully supported by keyv');
+          } else if (key !== null) {
+            await cacheService.del(`${CACHE_NAME}${key}`);
+            console.log(`CacheEvict: Evicted cache key ${CACHE_NAME}${key}`);
+          } else {
+            await cacheService.del(`${CACHE_NAME}${CACHE_KEY}`);
+            console.log(`CacheEvict: Evicted cache key ${CACHE_NAME}${CACHE_KEY}`);
+          }
+        } else {
+          console.warn(`CacheEvict: Cache service not available for method ${propertyKey}`);
+        }
+
+        return result;
+      } catch (error) {
+        console.error(`CacheEvict: Error in method ${propertyKey}:`, error);
+        // 如果缓存出错，执行原始方法
+        return await originMethod.apply(this, args);
       }
-
-      return result;
     };
   };
 }
@@ -55,30 +68,49 @@ export function Cacheable(CACHE_NAME: string, CACHE_KEY: string, CACHE_EXPIRESIN
     const originMethod = descriptor.value;
 
     descriptor.value = async function (...args: any[]) {
-      // 获取注入的缓存服务
-      const cacheService: PgCacheService = (this as any).cacheService;
-      const key = paramsKeyFormat(originMethod, CACHE_KEY, args);
+      try {
+        // 获取注入的缓存服务
+        const cacheService: PgCacheService = (this as any).cacheService;
+        
+        if (!cacheService) {
+          console.warn(`Cacheable: Cache service not available for method ${propertyKey}, executing original method`);
+          return await originMethod.apply(this, args);
+        }
 
-      if (key === null) {
+        const key = paramsKeyFormat(originMethod, CACHE_KEY, args);
+
+        if (key === null) {
+          console.warn(`Cacheable: Key format failed for method ${propertyKey}, executing original method`);
+          return await originMethod.apply(this, args);
+        }
+
+        const fullKey = `${CACHE_NAME}${key}`;
+        
+        // 尝试从缓存获取
+        const cacheResult = await cacheService.get(fullKey);
+
+        if (cacheResult !== null && cacheResult !== undefined) {
+          console.log(`Cacheable: Cache hit for key ${fullKey}`);
+          return cacheResult;
+        }
+
+        console.log(`Cacheable: Cache miss for key ${fullKey}, executing original method`);
+        
+        // 缓存未命中，执行原始方法
+        const result = await originMethod.apply(this, args);
+
+        // 将结果存入缓存（只有结果不为 undefined 才缓存）
+        if (result !== undefined) {
+          await cacheService.set(fullKey, result, CACHE_EXPIRESIN);
+          console.log(`Cacheable: Cached result for key ${fullKey}`);
+        }
+
+        return result;
+      } catch (error) {
+        console.error(`Cacheable: Error in method ${propertyKey}:`, error);
+        // 如果缓存出错，执行原始方法
         return await originMethod.apply(this, args);
       }
-
-      const fullKey = `${CACHE_NAME}${key}`;
-      
-      // 尝试从缓存获取
-      const cacheResult = await cacheService.get(fullKey);
-
-      if (cacheResult !== undefined) {
-        return cacheResult;
-      }
-
-      // 缓存未命中，执行原始方法
-      const result = await originMethod.apply(this, args);
-
-      // 将结果存入缓存
-      await cacheService.set(fullKey, result, CACHE_EXPIRESIN);
-
-      return result;
     };
   };
 }
@@ -98,19 +130,33 @@ export function CachePut(CACHE_NAME: string, CACHE_KEY: string, CACHE_EXPIRESIN?
     const originMethod = descriptor.value;
 
     descriptor.value = async function (...args: any[]) {
-      // 获取注入的缓存服务
-      const cacheService: PgCacheService = (this as any).cacheService;
-      const key = paramsKeyFormat(originMethod, CACHE_KEY, args);
+      try {
+        // 获取注入的缓存服务
+        const cacheService: PgCacheService = (this as any).cacheService;
+        
+        // 执行原始方法
+        const result = await originMethod.apply(this, args);
 
-      // 执行原始方法
-      const result = await originMethod.apply(this, args);
+        // 更新缓存
+        if (cacheService) {
+          const key = paramsKeyFormat(originMethod, CACHE_KEY, args);
 
-      // 更新缓存
-      if (key !== null) {
-        await cacheService.set(`${CACHE_NAME}${key}`, result, CACHE_EXPIRESIN);
+          if (key !== null) {
+            await cacheService.set(`${CACHE_NAME}${key}`, result, CACHE_EXPIRESIN);
+            console.log(`CachePut: Updated cache key ${CACHE_NAME}${key}`);
+          } else {
+            console.warn(`CachePut: Key format failed for method ${propertyKey}, skipping cache update`);
+          }
+        } else {
+          console.warn(`CachePut: Cache service not available for method ${propertyKey}`);
+        }
+
+        return result;
+      } catch (error) {
+        console.error(`CachePut: Error in method ${propertyKey}:`, error);
+        // 如果缓存出错，执行原始方法
+        return await originMethod.apply(this, args);
       }
-
-      return result;
     };
   };
 }

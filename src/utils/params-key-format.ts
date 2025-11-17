@@ -12,6 +12,7 @@ export function paramsKeyFormat(
 ): string | null {
   // 如果缓存键为空，返回 null
   if (!cacheKey) {
+    console.warn('paramsKeyFormat: cacheKey is null or empty');
     return null;
   }
 
@@ -26,6 +27,7 @@ export function paramsKeyFormat(
     
     // 检查参数索引是否有效
     if (paramIndex < 0 || paramIndex >= args.length) {
+      console.warn(`paramsKeyFormat: Invalid parameter index ${paramIndex}, available args length: ${args.length}`);
       return null;
     }
 
@@ -39,5 +41,6 @@ export function paramsKeyFormat(
     resultKey = resultKey.replace(match[0], paramString);
   }
 
+  console.log(`paramsKeyFormat: Generated key "${resultKey}" from template "${cacheKey}" with ${args.length} args`);
   return resultKey;
 }
