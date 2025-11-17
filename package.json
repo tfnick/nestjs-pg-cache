@@ -1,5 +1,5 @@
 {
-  "name": "nestjs-pg-cache",
+  "name": "@tfnick/nestjs-pg-cache",
   "version": "1.0.0",
   "description": "NestJS cache module based on @keyv/postgres",
   "main": "dist/index.js",
