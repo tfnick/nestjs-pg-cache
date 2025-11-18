@@ -33,6 +33,9 @@ export class PgCacheService {
           if (this.options.table) {
             keyvOptions.table = this.options.table;
           }
+          if (this.options.useUnloggedTable !== undefined) {
+            keyvOptions.useUnloggedTable = this.options.useUnloggedTable;
+          }
           if (this.options.namespace) {
             keyvOptions.namespace = this.options.namespace;
           }
