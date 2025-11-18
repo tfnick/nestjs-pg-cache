@@ -17,40 +17,92 @@ export class PgCacheService {
 
   private initializeCache() {
     try {
-      const keyvOptions: any = {
-        ttl: this.options.ttl || DEFAULT_CACHE_TTL,
-        compression: this.options.compression,
-        serialize: this.options.serialize,
-        deserialize: this.options.deserialize
-      };
+      this.logger.log('Initializing cache with options:', JSON.stringify(this.options, null, 2));
 
-      // 使用存储实例�?URI
-      if (this.options.store) {
-        keyvOptions.store = this.options.store;
-      } else if (this.options.uri) {
-        // 创建 PostgresStore 实例，确保正确初始化
-        const postgresStore = new PostgresStore({
-          uri: this.options.uri,
-          table: this.options.table || 'keyv_cache',
-          useUnloggedTable: this.options.useUnloggedTable
-        });
-        
-        // PostgresStore 初始化是同步的，不需要等�?
-        
-        keyvOptions.store = postgresStore;
+      // 方法1: 直接传递 URI 给 Keyv
+      if (this.options.uri) {
+        try {
+          const keyvOptions: any = {
+            uri: this.options.uri,
+            ttl: this.options.ttl || DEFAULT_CACHE_TTL,
+            compression: this.options.compression,
+            serialize: this.options.serialize,
+            deserialize: this.options.deserialize
+          };
+
+          if (this.options.table) {
+            keyvOptions.table = this.options.table;
+          }
+          if (this.options.namespace) {
+            keyvOptions.namespace = this.options.namespace;
+          }
+
+          this.cache = new Keyv(keyvOptions);
+          this.logger.log('Keyv initialized successfully with URI method');
+        } catch (uriError) {
+          this.logger.warn('URI method failed, trying PostgresStore:', uriError);
+          
+          // 方法2: 使用 PostgresStore 实例
+          const postgresStore = new PostgresStore({
+            uri: this.options.uri,
+            table: this.options.table || 'keyv_cache',
+            useUnloggedTable: this.options.useUnloggedTable
+          });
+
+          const keyvOptions: any = {
+            store: postgresStore,
+            ttl: this.options.ttl || DEFAULT_CACHE_TTL,
+            compression: this.options.compression,
+            serialize: this.options.serialize,
+            deserialize: this.options.deserialize
+          };
+
+          if (this.options.namespace) {
+            keyvOptions.namespace = this.options.namespace;
+          }
+
+          this.cache = new Keyv(keyvOptions);
+          this.logger.log('Keyv initialized successfully with PostgresStore method');
+        }
+      } else if (this.options.store) {
+        // 使用提供的存储实例
+        const keyvOptions: any = {
+          store: this.options.store,
+          ttl: this.options.ttl || DEFAULT_CACHE_TTL,
+          compression: this.options.compression,
+          serialize: this.options.serialize,
+          deserialize: this.options.deserialize
+        };
+
+        if (this.options.namespace) {
+          keyvOptions.namespace = this.options.namespace;
+        }
+
+        this.cache = new Keyv(keyvOptions);
+        this.logger.log('Keyv initialized successfully with provided store');
+      } else {
+        // 使用内存存储
+        const keyvOptions: any = {
+          ttl: this.options.ttl || DEFAULT_CACHE_TTL,
+          compression: this.options.compression,
+          serialize: this.options.serialize,
+          deserialize: this.options.deserialize
+        };
+
+        if (this.options.namespace) {
+          keyvOptions.namespace = this.options.namespace;
+        }
+
+        this.cache = new Keyv(keyvOptions);
+        this.logger.log('Keyv initialized successfully with memory storage');
       }
-
-      // 添加其他配置
-      if (this.options.namespace) keyvOptions.namespace = this.options.namespace;
-
-      this.cache = new Keyv(keyvOptions);
 
       // 处理连接错误
       this.cache.on('error', (error) => {
         this.logger.error('Cache connection error:', error);
       });
 
-      this.logger.log('PostgreSQL cache initialized successfully');
+      this.logger.log('Cache initialization completed');
     } catch (error) {
       this.logger.error('Failed to initialize cache:', error);
       throw error;
@@ -62,11 +114,11 @@ export class PgCacheService {
   }
 
   /**
-   * 基本信息 - 模拟实现
+   * 基本信息模拟实现
    * @returns 模拟的Redis INFO信息
    */
   async getInfo(): Promise<Record<string, string>> {
-    // PostgreSQL 不支持类�?Redis �?INFO 命令
+    // PostgreSQL 不支持类似 Redis 的 INFO 命令
     // 返回模拟信息
     return {
       server: 'PostgreSQL Cache',
@@ -80,32 +132,32 @@ export class PgCacheService {
   }
 
   /**
-   * 分页查询缓存数据 - 不支�?
+   * 分页查询缓存数据不支持
    * @param data 分页参数
-   * @returns 空数�?
+   * @returns 空数组
    */
   async skipFind(data: { key: string; pageSize: number; pageNum: number }): Promise<string[]> {
-    // Keyv 不支持列表分页查询，返回空数组作为模�?
+    // Keyv 不支持列表分页查询，返回空数组作为模拟
     this.logger.warn('skipFind operation not supported in PostgreSQL cache, returning empty array');
     return [];
   }
 
   /**
-   * 缓存Key数量 - 不支�?
-   * @returns 模拟�?0
+   * 缓存Key数量不支持
+   * @returns 模拟值0
    */
   async getDbSize(): Promise<number> {
-    // Keyv 不支持直接获取键数量，返回模拟�?
+    // Keyv 不支持直接获取键数量，返回模拟值
     this.logger.warn('getDbSize operation not supported in PostgreSQL cache, returning 0');
     return 0;
   }
 
   /**
-   * 命令统计 - 不支�?
-   * @returns 空数�?
+   * 命令统计不支持
+   * @returns 空数组
    */
   async commandStats(): Promise<Array<{name: string; value: number}>> {
-    // PostgreSQL 不支持命令统计，返回空数�?
+    // PostgreSQL 不支持命令统计，返回空数组
     this.logger.warn('commandStats operation not supported in PostgreSQL cache');
     return [];
   }
@@ -113,17 +165,21 @@ export class PgCacheService {
   /* --------------------- string 相关 -------------------------- */
 
   /**
-   * 设置键值对 - 支持
-   * @param key 存储 key �?
-   * @param val key 对应�?val
-   * @param ttl 可选，过期时间，单�?毫秒
+   * 设置键值对支持
+   * @param key 存储 key 值
+   * @param val key 对应的val
+   * @param ttl 可选，过期时间，单位毫秒
    */
   async set(key: string, val: any, ttl?: number): Promise<'OK' | null> {
     if (!key) return null;
     try {
-      // 对于字符串值直接存储，其他类型JSON序列�?
+      this.logger.debug(`Setting key: ${key}, value type: ${typeof val}`);
+      
+      // 对于字符串值直接存储，其他类型JSON序列化
       const data = typeof val === 'string' ? val : JSON.stringify(val);
       const result = await this.cache.set(key, data, ttl);
+      
+      this.logger.debug(`Set result: ${result} for key: ${key}`);
       return result ? 'OK' : null;
     } catch (error) {
       this.logger.error(`Failed to set key: ${key}`, error);
@@ -132,9 +188,9 @@ export class PgCacheService {
   }
 
   /**
-   * 批量获取�?- 支持
-   * @param keys 键数�?
-   * @returns 值数�?
+   * 批量获取值支持
+   * @param keys 键数组
+   * @returns 值数组
    */
   async mget(keys: string[]): Promise<any[]> {
     if (!keys || keys.length === 0) return [];
@@ -145,7 +201,7 @@ export class PgCacheService {
       return results.map(item => {
         if (item === undefined || item === null) return null;
         
-        // 尝试解析JSON，如果失败则返回原始字符�?
+        // 尝试解析JSON，如果失败则返回原始字符串
         try {
           return JSON.parse(item);
         } catch (parseError) {
@@ -159,21 +215,25 @@ export class PgCacheService {
   }
 
   /**
-   * 获取�?- 支持
-   * @param key �?
-   * @returns �?
+   * 获取值支持
+   * @param key 键
+   * @returns 值
    */
   async get(key: string): Promise<any> {
     if (!key || key === '*') return null;
     try {
+      this.logger.debug(`Getting key: ${key}`);
+      
       const res = await this.cache.get(key);
+      this.logger.debug(`Raw get result for ${key}:`, res);
+      
       if (res === undefined || res === null) return null;
       
-      // 尝试解析JSON，如果失败则返回原始字符�?
+      // 尝试解析JSON，如果失败则返回原始字符串
       try {
         return JSON.parse(res);
       } catch (parseError) {
-        // 如果解析失败，说明是原始字符�?
+        // 如果解析失败，说明是原始字符串
         return res;
       }
     } catch (error) {
@@ -183,9 +243,9 @@ export class PgCacheService {
   }
 
   /**
-   * 删除�?- 支持
-   * @param keys 键或键数�?
-   * @returns 删除的数�?
+   * 删除键支持
+   * @param keys 键或键数组
+   * @returns 删除的数量
    */
   async del(keys: string | string[]): Promise<number> {
     if (!keys || keys === '*') return 0;
@@ -203,32 +263,32 @@ export class PgCacheService {
   }
 
   /**
-   * 获取剩余生存时间 - 不支�?
-   * @param key �?
-   * @returns 模拟�?-1
+   * 获取剩余生存时间不支持
+   * @param key 键
+   * @returns 模拟值-1
    */
   async ttl(key: string): Promise<number | null> {
     if (!key) return null;
-    // Keyv 不支�?TTL 查询，返�?-1 表示永不过期
+    // Keyv 不支持 TTL 查询，返回 -1 表示永不过期
     this.logger.warn('ttl operation not supported in PostgreSQL cache, returning -1');
     return -1;
   }
 
   /**
-   * 获取匹配的键 - 不支�?
+   * 获取匹配的键不支持
    * @param key 模式
-   * @returns 空数�?
+   * @returns 空数组
    */
   async keys(key?: string): Promise<string[]> {
-    // Keyv 不支持模式匹配查询，返回空数�?
+    // Keyv 不支持模式匹配查询，返回空数组
     this.logger.warn('keys operation with pattern not supported in PostgreSQL cache, returning empty array');
     return [];
   }
 
   /**
-   * 设置键值对，仅当键不存在时 - 支持
-   * @param key �?
-   * @param val �?
+   * 设置键值对，仅当键不存在时支持
+   * @param key 键
+   * @param val 值
    * @param ttl 过期时间(毫秒)
    */
   async setnx(key: string, val: any, ttl?: number): Promise<number> {
@@ -236,7 +296,7 @@ export class PgCacheService {
     try {
       // 检查键是否存在
       const exists = await this.hasKey(key);
-      if (exists) return 0; // 键已存在，设置失�?
+      if (exists) return 0; // 键已存在，设置失败
       
       // 设置新键
       const result = await this.set(key, val, ttl);
@@ -248,9 +308,9 @@ export class PgCacheService {
   }
 
   /**
-   * 设置键值对，仅当键存在�?- 支持
-   * @param key �?
-   * @param val �?
+   * 设置键值对，仅当键存在时支持
+   * @param key 键
+   * @param val 值
    * @param ttl 过期时间(毫秒)
    */
   async setex(key: string, val: any, ttl?: number): Promise<'OK' | null> {
@@ -258,9 +318,9 @@ export class PgCacheService {
     try {
       // 检查键是否存在
       const exists = await this.hasKey(key);
-      if (!exists) return null; // 键不存在，设置失�?
+      if (!exists) return null; // 键不存在，设置失败
       
-      // 更新已存在的�?
+      // 更新已存在的键
       return await this.set(key, val, ttl);
     } catch (error) {
       this.logger.error(`Failed to setex key: ${key}`, error);
@@ -269,8 +329,8 @@ export class PgCacheService {
   }
 
   /**
-   * 获取字符串值的长度 - 支持
-   * @param key �?
+   * 获取字符串值的长度支持
+   * @param key 键
    */
   async strlen(key: string): Promise<number> {
     if (!key) return 0;
@@ -288,10 +348,10 @@ export class PgCacheService {
   /* ----------------------- hash ----------------------- */
 
   /**
-   * 设置哈希字段�?- 使用复合键模�?
-   * @param key 哈希�?
-   * @param field 字段�?
-   * @param value 字段�?
+   * 设置哈希字段值使用复合键模拟
+   * @param key 哈希键
+   * @param field 字段名
+   * @param value 字段值
    */
   async hset(key: string, field: string, value: string): Promise<string | number | null> {
     if (!key || !field) return null;
@@ -306,10 +366,10 @@ export class PgCacheService {
   }
 
   /**
-   * 批量设置哈希字段�?- 使用复合键模�?
-   * @param key 哈希�?
+   * 批量设置哈希字段值使用复合键模拟
+   * @param key 哈希键
    * @param data 字段数据
-   * @param expire 过期时间(�?
+   * @param expire 过期时间(秒)
    */
   async hmset(key: string, data: Record<string, string | number | boolean>, expire?: number): Promise<number> {
     if (!key || !data) return 0;
@@ -329,9 +389,9 @@ export class PgCacheService {
   }
 
   /**
-   * 获取哈希字段�?- 支持
-   * @param key 哈希�?
-   * @param field 字段�?
+   * 获取哈希字段值支持
+   * @param key 哈希键
+   * @param field 字段名
    */
   async hget(key: string, field: string): Promise<string | null> {
     if (!key || !field) return null;
@@ -346,33 +406,33 @@ export class PgCacheService {
   }
 
   /**
-   * 获取所有哈希字段�?- 不支�?
-   * @param key 哈希�?
-   * @returns 空数�?
+   * 获取所有哈希字段值不支持
+   * @param key 哈希键
+   * @returns 空数组
    */
   async hvals(key: string): Promise<string[]> {
     if (!key) return [];
-    // 不支持获取所有字段值，返回空数�?
+    // 不支持获取所有字段值，返回空数组
     this.logger.warn('hvals operation not supported in PostgreSQL cache, returning empty array');
     return [];
   }
 
   /**
-   * 获取所有哈希字�?- 不支�?
-   * @param key 哈希�?
-   * @returns 空对�?
+   * 获取所有哈希字段不支持
+   * @param key 哈希键
+   * @returns 空对象
    */
   async hGetAll(key: string): Promise<Record<string, string>> {
     if (!key) return {};
-    // 不支持获取所有字段，返回空对�?
+    // 不支持获取所有字段，返回空对象
     this.logger.warn('hGetAll operation not supported in PostgreSQL cache, returning empty object');
     return {};
   }
 
   /**
-   * 删除哈希字段 - 支持
-   * @param key 哈希�?
-   * @param fields 字段名或字段名数�?
+   * 删除哈希字段支持
+   * @param key 哈希键
+   * @param fields 字段名或字段名数组
    */
   async hdel(key: string, fields: string | string[]): Promise<number> {
     if (!key || !fields || (Array.isArray(fields) && fields.length === 0)) return 0;
@@ -394,8 +454,8 @@ export class PgCacheService {
   }
 
   /**
-   * 删除所有哈希字�?- 不支�?
-   * @param key 哈希�?
+   * 删除所有哈希字段不支持
+   * @param key 哈希键
    * @returns 0
    */
   async hdelAll(key: string): Promise<number> {
@@ -406,9 +466,9 @@ export class PgCacheService {
   }
 
   /**
-   * 检查哈希字段是否存�?- 支持
-   * @param key 哈希�?
-   * @param field 字段�?
+   * 检查哈希字段是否存在支持
+   * @param key 哈希键
+   * @param field 字段名
    */
   async hexists(key: string, field: string): Promise<number> {
     if (!key || !field) return 0;
@@ -423,9 +483,9 @@ export class PgCacheService {
   }
 
   /**
-   * 获取哈希字段数量 - 不支�?
-   * @param key 哈希�?
-   * @returns 模拟�?0
+   * 获取哈希字段数量不支持
+   * @param key 哈希键
+   * @returns 模拟值0
    */
   async hlen(key: string): Promise<number> {
     if (!key) return 0;
@@ -434,9 +494,9 @@ export class PgCacheService {
   }
 
   /**
-   * 获取哈希所有字段名 - 不支�?
-   * @param key 哈希�?
-   * @returns 空数�?
+   * 获取哈希所有字段名不支持
+   * @param key 哈希键
+   * @returns 空数组
    */
   async hkeys(key: string): Promise<string[]> {
     if (!key) return [];
@@ -444,10 +504,10 @@ export class PgCacheService {
     return [];
   }
 
-  /* -----------   list 相关操作 - 全部不支�?------------------ */
+  /* -----------   list 相关操作全部不支持 ------------------ */
 
   /**
-   * 获取列表长度 - 不支�?
+   * 获取列表长度不支持
    */
   async lLength(key: string): Promise<number> {
     if (!key) return 0;
@@ -456,7 +516,7 @@ export class PgCacheService {
   }
 
   /**
-   * 通过索引设置列表元素的�?- 不支�?
+   * 通过索引设置列表元素的值不支持
    */
   async lSet(key: string, index: number, val: string): Promise<'OK' | null> {
     if (!key || index < 0) return null;
@@ -465,7 +525,7 @@ export class PgCacheService {
   }
 
   /**
-   * 通过索引获取列表元素 - 不支�?
+   * 通过索引获取列表元素不支持
    */
   async lIndex(key: string, index: number): Promise<string | null> {
     if (!key || index < 0) return null;
@@ -474,7 +534,7 @@ export class PgCacheService {
   }
 
   /**
-   * 获取列表范围 - 不支�?
+   * 获取列表范围不支持
    */
   async lRange(key: string, start: number, stop: number): Promise<string[] | null> {
     if (!key) return null;
@@ -483,7 +543,7 @@ export class PgCacheService {
   }
 
   /**
-   * 左推入列�?- 不支�?
+   * 左推入列表不支持
    */
   async lLeftPush(key: string, ...val: string[]): Promise<number> {
     if (!key) return 0;
@@ -492,7 +552,7 @@ export class PgCacheService {
   }
 
   /**
-   * 左推入已存在列表 - 不支�?
+   * 左推入已存在列表不支持
    */
   async lLeftPushIfPresent(key: string, ...val: string[]): Promise<number> {
     if (!key) return 0;
@@ -501,7 +561,7 @@ export class PgCacheService {
   }
 
   /**
-   * 左插�?- 不支�?
+   * 左插入不支持
    */
   async lLeftInsert(key: string, pivot: string, val: string): Promise<number> {
     if (!key || !pivot) return 0;
@@ -510,7 +570,7 @@ export class PgCacheService {
   }
 
   /**
-   * 右插�?- 不支�?
+   * 右插入不支持
    */
   async lRightInsert(key: string, pivot: string, val: string): Promise<number> {
     if (!key || !pivot) return 0;
@@ -519,7 +579,7 @@ export class PgCacheService {
   }
 
   /**
-   * 右推�?- 不支�?
+   * 右推入不支持
    */
   async lRightPush(key: string, ...val: string[]): Promise<number> {
     if (!key) return 0;
@@ -528,7 +588,7 @@ export class PgCacheService {
   }
 
   /**
-   * 右推入已存在列表 - 不支�?
+   * 右推入已存在列表不支持
    */
   async lRightPushIfPresent(key: string, ...val: string[]): Promise<number> {
     if (!key) return 0;
@@ -537,7 +597,7 @@ export class PgCacheService {
   }
 
   /**
-   * 左弹�?- 不支�?
+   * 左弹出不支持
    */
   async lLeftPop(key: string): Promise<string | null> {
     if (!key) return null;
@@ -546,7 +606,7 @@ export class PgCacheService {
   }
 
   /**
-   * 右弹�?- 不支�?
+   * 右弹出不支持
    */
   async lRightPop(key: string): Promise<string | null> {
     if (!key) return null;
@@ -555,7 +615,7 @@ export class PgCacheService {
   }
 
   /**
-   * 列表修剪 - 不支�?
+   * 列表修剪不支持
    */
   async lTrim(key: string, start: number, stop: number): Promise<'OK' | null> {
     if (!key) return null;
@@ -564,7 +624,7 @@ export class PgCacheService {
   }
 
   /**
-   * 移除列表元素 - 不支�?
+   * 移除列表元素不支持
    */
   async lRemove(key: string, count: number, val: string): Promise<number> {
     if (!key) return 0;
@@ -573,7 +633,7 @@ export class PgCacheService {
   }
 
   /**
-   * 弹出并推�?- 不支�?
+   * 弹出并推入不支持
    */
   async lPoplPush(sourceKey: string, destinationKey: string, timeout: number): Promise<string | null> {
     if (!sourceKey || !destinationKey) return null;
@@ -582,8 +642,8 @@ export class PgCacheService {
   }
 
   /**
-   * 删除全部缓存 - 支持
-   * @returns 删除的数�?
+   * 删除全部缓存支持
+   * @returns 删除的数量
    */
   async reset(): Promise<number> {
     try {
@@ -595,7 +655,7 @@ export class PgCacheService {
     }
   }
 
-  // ========== 向后兼容的原有方�?==========
+  // ========== 向后兼容的原有方法 ==========
 
   /**
    * Get value from cache by key (向后兼容)
@@ -680,7 +740,7 @@ export class PgCacheService {
   }
 
   /**
-   * 向后兼容的删除方�?(避免与del方法冲突)
+   * 向后兼容的删除方法(避免与del方法冲突)
    */
   async deleteCompat(key: string): Promise<boolean> {
     const result = await this.del(key);
@@ -688,7 +748,7 @@ export class PgCacheService {
   }
 
   /**
-   * 向后兼容的获取方�?(避免与get方法冲突)
+   * 向后兼容的获取方法(避免与get方法冲突)
    */
   async getCompat<T>(key: string): Promise<T | undefined> {
     try {
