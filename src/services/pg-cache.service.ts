@@ -178,8 +178,8 @@ export class PgCacheService {
     try {
       this.logger.debug(`Setting key: ${key}, value type: ${typeof val}`);
       
-      // 对于字符串值直接存储，其他类型JSON序列化
-      const data = typeof val === 'string' ? val : JSON.stringify(val);
+      // 统一进行JSON序列化，确保类型一致性
+      const data = JSON.stringify(val);
       const result = await this.cache.set(key, data, ttl);
       
       this.logger.debug(`Set result: ${result} for key: ${key}`);
@@ -204,7 +204,7 @@ export class PgCacheService {
       return results.map(item => {
         if (item === undefined || item === null) return null;
         
-        // 尝试解析JSON，如果失败则返回原始字符串
+        // 始终进行JSON解析，保持与set方法的一致性
         try {
           return JSON.parse(item);
         } catch (parseError) {
@@ -232,11 +232,11 @@ export class PgCacheService {
       
       if (res === undefined || res === null) return null;
       
-      // 尝试解析JSON，如果失败则返回原始字符串
+      // 始终进行JSON解析，保持与set方法的一致性
       try {
         return JSON.parse(res);
       } catch (parseError) {
-        // 如果解析失败，说明是原始字符串
+        // 如果解析失败，返回原始字符串
         return res;
       }
     } catch (error) {

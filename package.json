@@ -4,8 +4,14 @@
   "description": "NestJS cache module based on @keyv/postgres",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist/**/*",
+    "src/**/*",
+    "README.md",
+    "DEBUG_GUIDE.md"
+  ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --sourceMap --inlineSources",
     "test": "jest --config=test/jest.config.js --passWithNoTests",
     "test:watch": "jest --config=test/jest.config.js --watch",
     "test:cov": "jest --config=test/jest.config.js --coverage",

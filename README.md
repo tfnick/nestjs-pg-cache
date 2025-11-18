@@ -137,6 +137,83 @@ export class ProductService {
 }
 ```
 
+## 键名行为说明
+
+### Keyv Namespace 机制
+
+Keyv 使用 namespace 机制来避免键名冲突，理解这一点非常重要：
+
+#### 默认行为
+```typescript
+// 不设置 namespace
+PgCacheModule.forRoot({
+  cache: {
+    uri: 'postgresql://...',
+    // namespace 默认为 'keyv'
+  }
+});
+
+await cacheService.set('user:123', userData);
+// 实际存储的键: 'keyv:user:123'
+```
+
+#### 自定义 Namespace
+```typescript
+PgCacheModule.forRoot({
+  cache: {
+    uri: 'postgresql://...',
+    namespace: 'myapp:'  // 实际存储: 'myapp:keyv:user:123'
+  }
+});
+
+await cacheService.set('user:123', userData);
+// 实际存储的键: 'myapp:keyv:user:123'
+```
+
+#### 禁用 Namespace
+```typescript
+PgCacheModule.forRoot({
+  cache: {
+    uri: 'postgresql://...',
+    namespace: ''  // 实际存储: 'user:123'
+  }
+});
+
+await cacheService.set('user:123', userData);
+// 实际存储的键: 'user:123'
+```
+
+### 实际存储键名规则
+
+最终存储在数据库中的键名格式为：`{namespace}{keyv_default}{user_key}`
+
+| namespace 设置 | 最终存储键名（传入 'user:123'） |
+|---------------|----------------------------|
+| 未设置 | `keyv:user:123` |
+| `namespace: 'app:'` | `app:keyv:user:123` |
+| `namespace: ''` | `user:123` |
+| `namespace: 'cache:'` | `cache:keyv:user:123` |
+
+### 键名最佳实践
+
+```typescript
+// 推荐: 明确设置 namespace
+PgCacheModule.forRoot({
+  cache: {
+    uri: 'postgresql://...',
+    namespace: 'myapp:',  // 明确前缀
+  }
+});
+
+// 推荐: 在业务层考虑 namespace
+export const CACHE_KEYS = {
+  // 考虑了 namespace 的键名设计
+  USER: (id: string) => `user:${id}`,      // 实际: myapp:keyv:user:123
+  CONFIG: () => `config:global`,          // 实际: myapp:keyv:config:global
+  SESSION: (token: string) => `sess:${token}`, // 实际: myapp:keyv:sess:abc123
+};
+```
+
 ## 客户端 API 参考
 
 ### PgCacheService - 核心方法
@@ -160,6 +237,12 @@ const deleted = await cacheService.del('user:123');
 const cleared = await cacheService.reset();
 // 返回: 1
 ```
+
+> **注意**: 类型保持机制
+> - 字符串 `"67"` 会保持为字符串 `"67"`，不会变成数值 `67`
+> - 数值 `67` 会保持为数值 `67`
+> - 对象和数组会正确序列化/反序列化
+> - 保持了原始数据类型的完整性
 
 #### 批量操作
 
@@ -282,7 +365,7 @@ const info = await cacheService.getInfo();
 |------|------|------|--------|
 | uri | string | PostgreSQL 连接字符串 | process.env.DATABASE_URL |
 | table | string | 缓存表名 | 'keyv_cache' |
-| namespace | string | 键名前缀 | undefined |
+| namespace | string | 键名前缀，默认为 'keyv' | 'keyv' |
 | ttl | number | 默认过期时间（毫秒） | 3600000 (1小时) |
 | compression | boolean | 是否压缩 | false |
 | useUnloggedTable | boolean | 是否使用无日志表 | false |
@@ -399,6 +482,8 @@ export class CacheService {
 
 ### 缓存键命名策略
 
+⚠️ **重要提示**: Keyv 默认会为所有键添加 `keyv:` 前缀作为 namespace。如果你设置 `namespace: 'myapp:'`，那么实际存储的键会是 `myapp:keyv:yourkey`。
+
 ```typescript
 export const CACHE_KEYS = {
   USER: (id: string) => `user:${id}`,
@@ -409,6 +494,7 @@ export const CACHE_KEYS = {
   RATE_LIMIT: (ip: string) => `rate_limit:${ip}`,
 };
 
+// 方式1: 使用默认 namespace (实际存储为 keyv:user:123)
 @Injectable()
 export class UserService {
   async getUser(id: string) {
@@ -416,6 +502,22 @@ export class UserService {
     return await this.cacheService.get(cacheKey);
   }
 }
+
+// 方式2: 自定义 namespace (实际存储为 myapp:user:123)
+PgCacheModule.forRoot({
+  cache: {
+    uri: 'postgresql://...',
+    namespace: 'myapp:', // 实际存储为 myapp:keyv:user:123
+  }
+});
+
+// 方式3: 禁用 namespace (实际存储为 user:123)
+PgCacheModule.forRoot({
+  cache: {
+    uri: 'postgresql://...',
+    namespace: '', // 空字符串禁用前缀
+  }
+});
 ```
 
 ## 开发
