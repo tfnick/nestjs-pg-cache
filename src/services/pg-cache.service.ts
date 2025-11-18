@@ -277,15 +277,97 @@ export class PgCacheService {
     return -1;
   }
 
+
+
   /**
-   * 获取匹配的键不支持
-   * @param key 模式
-   * @returns 空数组
+   * 获取匹配的键支持右侧通配符
+   * @param pattern 模式，支持右侧通配符，如 'user:*' 或 'prefix*'
+   * @returns 匹配的键数组
    */
-  async keys(key?: string): Promise<string[]> {
-    // Keyv 不支持模式匹配查询，返回空数组
-    this.logger.warn('keys operation with pattern not supported in PostgreSQL cache, returning empty array');
-    return [];
+  async keys(pattern?: string): Promise<string[]> {
+    try {
+      if (!pattern || pattern === '*') {
+        // 如果没有模式或者是全匹配，返回空（避免返回所有键造成性能问题）
+        this.logger.warn('keys operation with "*" or empty pattern not supported for performance reasons');
+        return [];
+      }
+
+      // 检查是否包含通配符
+      const hasWildcard = pattern.includes('*');
+      
+      if (!hasWildcard) {
+        // 如果没有通配符，检查单个键是否存在
+        const exists = await this.hasKey(pattern);
+        return exists ? [pattern] : [];
+      }
+
+      // 如果不是右侧通配符，暂时不支持
+      if (!pattern.endsWith('*')) {
+        this.logger.warn('keys operation only supports right-side wildcards (prefix*)');
+        return [];
+      }
+
+      // 获取底层存储实例来执行 SQL 查询
+      const store = (this.cache as any).opts?.store;
+      if (!store) {
+        this.logger.warn('keys operation with wildcard not supported: cannot access database query');
+        return [];
+      }
+
+      // 获取存储配置，提供默认值
+      const storeOpts = store.opts || {};
+      const schema = storeOpts.schema || 'public';
+      const table = storeOpts.table || 'keyv';
+
+      // 处理右侧通配符
+      const prefix = pattern.slice(0, -1); // 移除最后的 '*'
+      
+      // 构建所有可能的模式
+      const possiblePatterns = [
+        `keyv:${prefix}%`,  // 默认情况
+        `${prefix}%`,       // 无前缀情况
+        ...(this.options.namespace ? [`keyv:${this.options.namespace}:${prefix}%`] : [])
+      ];
+
+      const matchedKeys: Set<string> = new Set();
+
+      // 对每个模式进行查询
+      for (const sqlPattern of possiblePatterns) {
+        try {
+          const sql = `SELECT key FROM ${schema}.${table} WHERE key LIKE $1`;
+          const rows = await store.query(sql, [sqlPattern]);
+          
+          for (const row of rows) {
+            const fullKey = row.key;
+            let cleanKey = fullKey;
+            
+            // 移除 keyv 前缀
+            if (fullKey.startsWith('keyv:')) {
+              cleanKey = fullKey.substring(5); // 移除 'keyv:'
+            }
+            
+            // 如果还有 namespace 前缀，也移除
+            if (this.options.namespace && cleanKey.startsWith(`${this.options.namespace}:`)) {
+              cleanKey = cleanKey.substring(this.options.namespace.length + 1);
+            }
+            
+            // 确保键匹配请求的前缀
+            if (cleanKey.startsWith(prefix)) {
+              matchedKeys.add(cleanKey);
+            }
+          }
+        } catch (error) {
+          this.logger.debug(`Query failed for pattern ${sqlPattern}:`, (error as Error).message);
+        }
+      }
+
+      const result = Array.from(matchedKeys);
+      this.logger.debug(`Found ${result.length} keys matching pattern: ${pattern}`);
+      return result;
+    } catch (error) {
+      this.logger.error('Failed to execute keys operation', error);
+      return [];
+    }
   }
 
   /**
