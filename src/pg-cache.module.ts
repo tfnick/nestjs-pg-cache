@@ -90,6 +90,7 @@ export class PgCacheModule {
       compression: options?.compression,
       serialize: options?.serialize,
       deserialize: options?.deserialize,
+      useUnloggedTable: options?.useUnloggedTable,
       store: options?.store,
     };
   }
