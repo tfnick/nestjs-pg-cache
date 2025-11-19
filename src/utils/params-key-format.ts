@@ -17,7 +17,7 @@ export function paramsKeyFormat(
   }
 
   // 检查模板中是否包含参数占位符
-  const paramRegex = /\{\{(\d+)\}\}/g;
+  const paramRegex = /\{([A-Za-z0-9_-]+)\}/g;
   let match;
   let resultKey = cacheKey;
 
