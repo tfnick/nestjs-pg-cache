@@ -36,8 +36,13 @@ export class PgCacheService {
           if (this.options.useUnloggedTable !== undefined) {
             keyvOptions.useUnloggedTable = this.options.useUnloggedTable;
           }
-          if (this.options.namespace) {
+          // 确保总是设置 namespace，即使是空字符串
+          // 这能确保 Keyv 的表创建行为一致
+          if (this.options.namespace !== undefined) {
             keyvOptions.namespace = this.options.namespace;
+          } else {
+            // 默认设置为空字符串而不是 undefined
+            keyvOptions.namespace = '';
           }
 
           this.cache = new Keyv(keyvOptions);
@@ -60,8 +65,13 @@ export class PgCacheService {
             deserialize: this.options.deserialize
           };
 
-          if (this.options.namespace) {
+          // 确保总是设置 namespace，即使是空字符串
+          // 这能确保 Keyv 的表创建行为一致
+          if (this.options.namespace !== undefined) {
             keyvOptions.namespace = this.options.namespace;
+          } else {
+            // 默认设置为空字符串而不是 undefined
+            keyvOptions.namespace = '';
           }
 
           this.cache = new Keyv(keyvOptions);
@@ -77,9 +87,11 @@ export class PgCacheService {
           deserialize: this.options.deserialize
         };
 
-        if (this.options.namespace) {
-          keyvOptions.namespace = this.options.namespace;
-        }
+          if (this.options.namespace !== undefined) {
+            keyvOptions.namespace = this.options.namespace;
+          } else {
+            keyvOptions.namespace = '';
+          }
 
         this.cache = new Keyv(keyvOptions);
         this.logger.log('Keyv initialized successfully with provided store');
@@ -92,9 +104,11 @@ export class PgCacheService {
           deserialize: this.options.deserialize
         };
 
-        if (this.options.namespace) {
-          keyvOptions.namespace = this.options.namespace;
-        }
+          if (this.options.namespace !== undefined) {
+            keyvOptions.namespace = this.options.namespace;
+          } else {
+            keyvOptions.namespace = '';
+          }
 
         this.cache = new Keyv(keyvOptions);
         this.logger.log('Keyv initialized successfully with memory storage');
