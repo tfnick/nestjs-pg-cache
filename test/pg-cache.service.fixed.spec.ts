@@ -12,13 +12,11 @@ describe('PgCacheService Fixed Tests', () => {
       imports: [
         PgCacheModule.forRoot({
           cache: {
-            ttl: 60000, // 1分钟
-            store: new PostgresStore({
-              uri: process.env.TEST_DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/test_cache',
-              table: 'keyv_cache',
-              namespace: '',
-              useUnloggedTable: false,
-            })
+            uri: process.env.TEST_DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/test_cache',
+            table: 'keyv_cache',
+            namespace: '',
+            useUnloggedTable: false,
+            ttl: 60000 // 1分钟
           }
         })
       ]

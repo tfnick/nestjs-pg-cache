@@ -87,11 +87,11 @@ export class PgCacheService {
           deserialize: this.options.deserialize
         };
 
-          if (this.options.namespace !== undefined) {
-            keyvOptions.namespace = this.options.namespace;
-          } else {
-            keyvOptions.namespace = '';
-          }
+        // 只有在PostgresStore没有设置namespace时才设置
+        // 避免重复设置导致的命名冲突
+        if (this.options.namespace !== undefined) {
+          keyvOptions.namespace = this.options.namespace;
+        }
 
         this.cache = new Keyv(keyvOptions);
         this.logger.log('Keyv initialized successfully with provided store');
