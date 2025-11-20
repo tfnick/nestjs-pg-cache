@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PgCacheModule, PgCacheService } from '../src';
+import PostgresStore from "@keyv/postgres";
 
 describe('PgCacheService Fixed Tests', () => {
   let service: PgCacheService;
@@ -11,9 +12,13 @@ describe('PgCacheService Fixed Tests', () => {
       imports: [
         PgCacheModule.forRoot({
           cache: {
-            uri: process.env.TEST_DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/test_cache',
-            table: 'fixed_test_cache',
-            ttl: 60000 // 1分钟
+            ttl: 60000, // 1分钟
+            store: new PostgresStore({
+              uri: process.env.TEST_DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/test_cache',
+              table: 'keyv_cache',
+              namespace: '',
+              useUnloggedTable: false,
+            })
           }
         })
       ]

@@ -6,7 +6,7 @@ describe('Simple Keys Test', () => {
   let cacheService: PgCacheService;
   let module: TestingModule;
 
-  const TEST_URI = 'postgresql://postgres:123456@localhost:5432/postgres';
+  const TEST_URI = 'postgresql://postgres:postgres@localhost:5432/test_cache';
   const TEST_TABLE = 'test_simple_keys';
 
   beforeAll(async () => {
