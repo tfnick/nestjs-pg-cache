@@ -19,72 +19,13 @@ export class PgCacheService {
     try {
       this.logger.log('Initializing cache with options:', JSON.stringify(this.options, null, 2));
 
-      // 方法1: 直接传递 URI 给 Keyv
-      if (this.options.uri) {
-        try {
-          const keyvOptions: any = {
-            uri: this.options.uri,
-            ttl: this.options.ttl || DEFAULT_CACHE_TTL,
-            compression: this.options.compression,
-            serialize: this.options.serialize,
-            deserialize: this.options.deserialize
-          };
-
-          if (this.options.table) {
-            keyvOptions.table = this.options.table;
-          }
-          if (this.options.useUnloggedTable !== undefined) {
-            keyvOptions.useUnloggedTable = this.options.useUnloggedTable;
-          }
-          // 确保总是设置 namespace，即使是空字符串
-          // 这能确保 Keyv 的表创建行为一致
-          if (this.options.namespace !== undefined) {
-            keyvOptions.namespace = this.options.namespace;
-          } else {
-            // 默认设置为空字符串而不是 undefined
-            keyvOptions.namespace = '';
-          }
-
-          this.cache = new Keyv(keyvOptions);
-          this.logger.log('Keyv initialized successfully with URI method');
-        } catch (uriError) {
-          this.logger.warn('URI method failed, trying PostgresStore:', uriError);
-          
-          // 方法2: 使用 PostgresStore 实例
-          const postgresStore = new PostgresStore({
-            uri: this.options.uri,
-            table: this.options.table || 'keyv_cache',
-            useUnloggedTable: this.options.useUnloggedTable
-          });
-
-          const keyvOptions: any = {
-            store: postgresStore,
-            ttl: this.options.ttl || DEFAULT_CACHE_TTL,
-            compression: this.options.compression,
-            serialize: this.options.serialize,
-            deserialize: this.options.deserialize
-          };
-
-          // 确保总是设置 namespace，即使是空字符串
-          // 这能确保 Keyv 的表创建行为一致
-          if (this.options.namespace !== undefined) {
-            keyvOptions.namespace = this.options.namespace;
-          } else {
-            // 默认设置为空字符串而不是 undefined
-            keyvOptions.namespace = '';
-          }
-
-          this.cache = new Keyv(keyvOptions);
-          this.logger.log('Keyv initialized successfully with PostgresStore method');
-        }
-      } else if (this.options.store) {
-        // 使用提供的存储实例
+      // 方法1: 如果提供了预创建的 store，直接使用
+      if (this.options.store) {
         const keyvOptions: any = {
           store: this.options.store,
           ttl: this.options.ttl || DEFAULT_CACHE_TTL,
-          compression: this.options.compression,
-          serialize: this.options.serialize,
-          deserialize: this.options.deserialize
+          compression: this.options.compression
+          // 移除 serialize 和 deserialize 选项，让 Keyv 自动处理
         };
 
         // 只有在PostgresStore没有设置namespace时才设置
@@ -95,20 +36,57 @@ export class PgCacheService {
 
         this.cache = new Keyv(keyvOptions);
         this.logger.log('Keyv initialized successfully with provided store');
-      } else {
-        // 使用内存存储
-        const keyvOptions: any = {
-          ttl: this.options.ttl || DEFAULT_CACHE_TTL,
-          compression: this.options.compression,
-          serialize: this.options.serialize,
-          deserialize: this.options.deserialize
-        };
+      }
+      // 方法2: 使用 URI 创建 PostgresStore（推荐方式）
+      else if (this.options.uri) {
+        try {
+          this.logger.log('Creating PostgresStore instance for URI...');
+          
+          // 强制使用 PostgresStore 确保数据持久化
+          const postgresStore = new PostgresStore({
+            uri: this.options.uri,
+            table: this.options.table || 'keyv_cache',
+            useUnloggedTable: this.options.useUnloggedTable
+          });
 
+          const keyvOptions: any = {
+            store: postgresStore, // 明确指定 store
+            ttl: this.options.ttl || DEFAULT_CACHE_TTL,
+            compression: this.options.compression
+            // 移除 serialize 和 deserialize 选项，让 Keyv 自动处理
+          };
+
+          // 确保总是设置 namespace，即使是空字符串
           if (this.options.namespace !== undefined) {
             keyvOptions.namespace = this.options.namespace;
           } else {
             keyvOptions.namespace = '';
           }
+
+          this.cache = new Keyv(keyvOptions);
+          this.logger.log('Keyv initialized successfully with PostgresStore (forced)');
+          
+          // 同步验证连接 - 不使用异步延迟
+          this.verifyPostgresConnection(postgresStore);
+          
+        } catch (storeError) {
+          this.logger.error('PostgresStore creation failed:', storeError);
+          throw new Error(`Failed to create PostgreSQL store: ${(storeError as Error).message}`);
+        }
+      }
+      // 方法3: 如果没有URI也没有store，使用内存存储
+      else {
+        const keyvOptions: any = {
+          ttl: this.options.ttl || DEFAULT_CACHE_TTL,
+          compression: this.options.compression
+          // 移除 serialize 和 deserialize 选项，让 Keyv 自动处理
+        };
+
+        if (this.options.namespace !== undefined) {
+          keyvOptions.namespace = this.options.namespace;
+        } else {
+          keyvOptions.namespace = '';
+        }
 
         this.cache = new Keyv(keyvOptions);
         this.logger.log('Keyv initialized successfully with memory storage');
@@ -123,6 +101,27 @@ export class PgCacheService {
     } catch (error) {
       this.logger.error('Failed to initialize cache:', error);
       throw error;
+    }
+  }
+
+  /**
+   * 验证PostgreSQL连接
+   */
+  private async verifyPostgresConnection(store: any): Promise<void> {
+    try {
+      if (typeof store.query === 'function') {
+        // 直接尝试查询，这会建立连接
+        await store.query('SELECT 1 as connection_test');
+        this.logger.log('PostgreSQL connection verified successfully');
+      } else if (typeof store.connect === 'function') {
+        const query = await store.connect();
+        this.logger.log('PostgreSQL connection verified successfully via connect()');
+      } else {
+        this.logger.warn('PostgresStore does not have query or connect method');
+      }
+    } catch (error) {
+      this.logger.error('PostgreSQL connection verification failed:', error);
+      // 不抛出错误，让服务继续运行，但记录警告
     }
   }
 
@@ -192,9 +191,8 @@ export class PgCacheService {
     try {
       this.logger.debug(`Setting key: ${key}, value type: ${typeof val}`);
       
-      // 统一进行JSON序列化，确保类型一致性
-      const data = JSON.stringify(val);
-      const result = await this.cache.set(key, data, ttl);
+      // Keyv 会自动处理序列化，不需要手动 JSON.stringify
+      const result = await this.cache.set(key, val, ttl);
       
       this.logger.debug(`Set result: ${result} for key: ${key}`);
       return result ? 'OK' : null;
@@ -216,14 +214,8 @@ export class PgCacheService {
         keys.map(key => this.cache.get(key))
       );
       return results.map(item => {
-        if (item === undefined || item === null) return null;
-        
-        // 始终进行JSON解析，保持与set方法的一致性
-        try {
-          return JSON.parse(item);
-        } catch (parseError) {
-          return item;
-        }
+        // Keyv 已经处理了反序列化，直接返回
+        return item === undefined ? null : item;
       });
     } catch (error) {
       this.logger.error('Failed to get multiple keys', error);
@@ -244,15 +236,8 @@ export class PgCacheService {
       const res = await this.cache.get(key);
       this.logger.debug(`Raw get result for ${key}:`, res);
       
-      if (res === undefined || res === null) return null;
-      
-      // 始终进行JSON解析，保持与set方法的一致性
-      try {
-        return JSON.parse(res);
-      } catch (parseError) {
-        // 如果解析失败，返回原始字符串
-        return res;
-      }
+      // Keyv 已经处理了反序列化，直接返回
+      return res === undefined ? null : res;
     } catch (error) {
       this.logger.error(`Failed to get key: ${key}`, error);
       return null;
@@ -493,6 +478,7 @@ export class PgCacheService {
     if (!key || !field) return null;
     try {
       const hashKey = `${key}:${field}`;
+      // Keyv 会自动处理序列化
       const result = await this.cache.set(hashKey, value);
       return result ? 'OK' : null;
     } catch (error) {
@@ -534,7 +520,8 @@ export class PgCacheService {
     try {
       const hashKey = `${key}:${field}`;
       const value = await this.cache.get(hashKey);
-      return value || null;
+      // Keyv 已经处理了反序列化，直接返回
+      return value === undefined ? null : value;
     } catch (error) {
       this.logger.error(`Failed to hget key: ${key}, field: ${field}`, error);
       return null;

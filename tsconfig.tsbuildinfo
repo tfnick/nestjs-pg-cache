@@ -1,0 +1,1 @@
+{"root":["./src/constants.ts","./src/index.ts","./src/pg-cache.module.ts","./src/decorators/keyv-cache.decorator.ts","./src/interfaces/pg-cache-options.interface.ts","./src/services/pg-cache.service.simple.ts","./src/services/pg-cache.service.ts","./src/utils/params-key-format.ts","./src/utils/wildcard-support.ts"],"version":"5.9.3"}
