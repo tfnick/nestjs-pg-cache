@@ -5,7 +5,7 @@ import { paramsKeyFormat } from './../utils/params-key-format';
 /**
  * 缓存清除注解 - 用于方法执行后清除缓存
  * @param CACHE_NAME 缓存名称前缀
- * @param CACHE_KEY 缓存键模板，支持 {{0}}、{{1}} 等参数占位符
+ * @param CACHE_KEY 缓存键模板，支持索引占位符 {{0}}、{{1}} 或参数名占位符 {userId}
  */
 export function CacheEvict(CACHE_NAME: string, CACHE_KEY: string) {
   const injectCache = Inject(PgCacheService);
@@ -19,7 +19,7 @@ export function CacheEvict(CACHE_NAME: string, CACHE_KEY: string) {
       try {
         // 获取注入的缓存服务
         const cacheService: PgCacheService = (this as any).cacheService;
-        
+
         // 执行原始方法
         const result = await originMethod.apply(this, args);
 
@@ -56,7 +56,7 @@ export function CacheEvict(CACHE_NAME: string, CACHE_KEY: string) {
 /**
  * 缓存注解 - 用于方法结果缓存
  * @param CACHE_NAME 缓存名称前缀
- * @param CACHE_KEY 缓存键模板，支持 {{0}}、{{1}} 等参数占位符
+ * @param CACHE_KEY 缓存键模板，支持索引占位符 {{0}}、{{1}} 或参数名占位符 {userId}
  * @param CACHE_EXPIRESIN 缓存过期时间（毫秒）
  */
 export function Cacheable(CACHE_NAME: string, CACHE_KEY: string, CACHE_EXPIRESIN?: number) {
@@ -71,7 +71,7 @@ export function Cacheable(CACHE_NAME: string, CACHE_KEY: string, CACHE_EXPIRESIN
       try {
         // 获取注入的缓存服务
         const cacheService: PgCacheService = (this as any).cacheService;
-        
+
         if (!cacheService) {
           console.warn(`Cacheable: Cache service not available for method ${propertyKey}, executing original method`);
           return await originMethod.apply(this, args);
@@ -85,7 +85,7 @@ export function Cacheable(CACHE_NAME: string, CACHE_KEY: string, CACHE_EXPIRESIN
         }
 
         const fullKey = `${CACHE_NAME}${key}`;
-        
+
         // 尝试从缓存获取
         const cacheResult = await cacheService.get(fullKey);
 
@@ -95,7 +95,7 @@ export function Cacheable(CACHE_NAME: string, CACHE_KEY: string, CACHE_EXPIRESIN
         }
 
         console.log(`Cacheable: Cache miss for key ${fullKey}, executing original method`);
-        
+
         // 缓存未命中，执行原始方法
         const result = await originMethod.apply(this, args);
 
@@ -133,7 +133,7 @@ export function CachePut(CACHE_NAME: string, CACHE_KEY: string, CACHE_EXPIRESIN?
       try {
         // 获取注入的缓存服务
         const cacheService: PgCacheService = (this as any).cacheService;
-        
+
         // 执行原始方法
         const result = await originMethod.apply(this, args);
 
@@ -169,8 +169,8 @@ export function CachePut(CACHE_NAME: string, CACHE_KEY: string, CACHE_EXPIRESIN?
  * @param CACHE_EXPIRESIN 缓存过期时间（毫秒）
  */
 export function CacheConditional(
-  CACHE_NAME: string, 
-  CACHE_KEY: string, 
+  CACHE_NAME: string,
+  CACHE_KEY: string,
   condition: (result: any, args: any[]) => boolean,
   CACHE_EXPIRESIN?: number
 ) {
@@ -191,7 +191,7 @@ export function CacheConditional(
       }
 
       const fullKey = `${CACHE_NAME}${key}`;
-      
+
       // 尝试从缓存获取
       const cacheResult = await cacheService.get(fullKey);
 
